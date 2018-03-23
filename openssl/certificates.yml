@@ -1,0 +1,89 @@
+---
+# This Playbook generates Certificates for Kubernetes
+
+
+- name: Generate CA.key
+  hosts: localhost
+
+  tasks:
+
+  - file:
+      path: ./ca.key
+      state: absent
+
+  - file:
+      state: absent
+      path: ./ca.crt
+
+  - file:
+      state: absent
+      path: ./server.key
+
+  - file:
+      state: absent
+      path: ./csr.conf
+
+  - file:
+      state: absent
+      path: ./server.csr
+
+  - file:
+      state: absent
+      path: ./server.crt
+
+  - name: Generate a ca.key with 2048bit
+    command: openssl genrsa -out ca.key 2048
+
+  - name: According to the ca.key generate a ca.crt
+    command: openssl req -x509 -new -nodes -key ca.key -subj "/CN=www.example.com" -days 10000 -out ca.crt
+
+  - name: enerate a server.key with 2048bit
+    command: openssl genrsa -out server.key 2048
+
+  - name: Create a config file for generating a Certificate Signing Request (CSR)
+    shell:
+      cmd: |
+        cat <<EOF >csr.conf
+        [ req ]
+        default_bits = 2048
+        prompt = no
+        default_md = sha256
+        req_extensions = req_ext
+        distinguished_name = dn
+
+        [ dn ]
+        C = FR
+        ST = PACA
+        L = Valbonne
+        O = Amadeus
+        OU = TPE/CPM/OTP/ACS/ACE
+        CN = www.example.com
+
+        [ req_ext ]
+        subjectAltName = @alt_names
+
+        [ alt_names ]
+        DNS.1 = kubernetes
+        DNS.2 = kubernetes.default
+        DNS.3 = kubernetes.default.svc
+        DNS.4 = kubernetes.default.svc.cluster
+        DNS.5 = kubernetes.default.svc.cluster.local
+        IP.1 = 192.168.10.1
+        IP.2 = 10.10.100.1
+
+        [ v3_ext ]
+        authorityKeyIdentifier=keyid,issuer:always
+        basicConstraints=CA:FALSE
+        keyUsage=keyEncipherment,dataEncipherment
+        extendedKeyUsage=serverAuth,clientAuth
+        subjectAltName=@alt_names
+        EOF
+
+
+  - name: Generate the certificate signing request based on the config file
+    command: openssl req -new -key server.key -out server.csr -config csr.conf
+
+  - name: Generate the server certificate using the ca.key, ca.crt and server.csr
+    command: openssl x509 -req -in server.csr -CA ca.crt \
+      -CAkey ca.key -CAcreateserial -out server.crt -days 10000 \
+      -extensions v3_ext -extfile csr.conf

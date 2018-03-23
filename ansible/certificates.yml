@@ -1,0 +1,103 @@
+---
+# This Playbook generates Certificates for Kubernetes
+
+
+- name: Generate CA.key
+  hosts: localhost
+
+  tasks:
+
+  - file:
+      path: ./ca.key
+      state: absent
+
+  - file:
+      state: absent
+      path: ./ca.crt
+
+  - file:
+      state: absent
+      path: ./tmp_ca.csr
+
+  - file:
+      state: absent
+      path: ./server.key
+
+  - file:
+      state: absent
+      path: ./csr.conf
+
+  - file:
+      state: absent
+      path: ./server.csr
+
+  - file:
+      state: absent
+      path: ./server.crt
+
+  - file:
+      state: absent
+      path: ./ca.srl
+
+  - name: Generate a ca.key with 2048bit
+    openssl_privatekey:
+      path: ./ca.key
+      size: 2048
+
+  - name: Generate an OpenSSL CSR.
+    openssl_csr:
+      path: ./tmp_ca.csr
+      privatekey_path: ./ca.key
+      common_name: www.example.com
+
+  - name: Generate a Self Signed OpenSSL certificate.
+    openssl_certificate:
+      path: ./ca.crt
+      privatekey_path: ca.key
+      csr_path: ./tmp_ca.csr
+      provider: selfsigned
+      issuer:
+        CN: www.example.com
+
+  #---
+
+  - name: Generate server.key with 2048bit
+    openssl_privatekey:
+      path: ./server.key
+      size: 2048
+      type: RSA
+
+  - name: Generate csr for server
+    openssl_csr:
+      path: ./server.csr
+      privatekey_path: ./server.key
+      common_name: www.example.com
+      country_name: FR
+      subject_alt_name:
+        - DNS:kubernetes
+        - DNS:kubernetes.default
+        - DNS:kubernetes.default.svc
+        - DNS:kubernetes.default.svc.cluster
+        - DNS:kubernetes.default.svc.cluster.local
+        - IP:192.168.10.1
+        - IP:10.10.100.1
+      locality_name: Valbonne
+      organization_name: Amadeus
+      organizational_unit_name: TPE/CPM/OTP/ACS/ACE
+      state_or_province_name: PACA
+      key_usage:
+        - keyEncipherment
+        - dataEncipherment
+      extended_key_usage:
+        - serverAuth
+        - clientAuth
+
+
+  - name: Generate server.crt
+    openssl_certificate:
+      path: ./server.crt
+      privatekey_path: ./ca.key
+      csr_path: ./server.csr
+      issuer:
+        CN: www.example.com
+      provider: selfsigned
